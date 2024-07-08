@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse: import urlparse, urljoin
+from urllib.parse import urlparse, urljoin
 import argparse
 from colorama import Fore, Style, init
 from tqdm import tqdm
