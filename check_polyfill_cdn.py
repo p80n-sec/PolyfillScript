@@ -5,6 +5,7 @@ import argparse
 from colorama import Fore, Style, init
 from tqdm import tqdm
 import re
+import os
 
 init(autoreset=True)
 
@@ -37,6 +38,23 @@ def check_polyfill_cdn(url, verbose):
             print(f"{Fore.RED}Error accessing {url}: {e}")
         return False
 
+def scan_dangerous_functions(script_content, url, verbose):
+    dangerous_functions = [
+        'bypassSecurityTrustHtml', 'bypassSecurityTrustScript', 'bypassSecurityTrustStyle',
+        'bypassSecurityTrustUrl', 'bypassSecurityTrustResourceUrl', 'trustAsHtml',
+        '$sce.trustAsHtml', '$eval', '$evalAsync', 'eval'
+    ]
+    found_functions = []
+    for function in dangerous_functions:
+        if re.search(r'\b' + re.escape(function) + r'\b', script_content):
+            found_functions.append(function)
+    
+    if found_functions:
+        if verbose:
+            print(f"{Fore.YELLOW}Dangerous functions found in {url}: {', '.join(found_functions)}")
+        else:
+            print(f"{Fore.RED}{url} contains dangerous functions: {', '.join(found_functions)}")
+
 def get_links_on_page(url, domain, verbose):
     try:
         response = requests.get(url)
@@ -54,10 +72,11 @@ def get_links_on_page(url, domain, verbose):
         return set()
 
 def main():
-    parser = argparse.ArgumentParser(description="Check URLs for polyfill CDN usage.")
+    parser = argparse.ArgumentParser(description="Check URLs for polyfill CDN usage and dangerous JavaScript functions.")
     parser.add_argument('-u', '--url', help="Run a single URL from input.")
     parser.add_argument('-f', '--file', default='urls.txt', help="Specify a file containing URLs.")
     parser.add_argument('-v', '--verbose', action='store_true', help="Enable verbose output.")
+    parser.add_argument('-j', '--js', action='store_true', help="Scan for dangerous JavaScript functions.")
 
     args = parser.parse_args()
 
@@ -78,6 +97,19 @@ def main():
             if not args.verbose and uses_polyfill:
                 print(f"{Fore.RED}{url} uses polyfill CDN")
 
+            if args.js:
+                try:
+                    response = requests.get(url)
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    scripts = soup.find_all('script')
+                    for script in scripts:
+                        script_content = script.string or ""
+                        scan_dangerous_functions(script_content, url, args.verbose)
+                except requests.exceptions.RequestException as e:
+                    if args.verbose:
+                        print(f"{Fore.RED}Error accessing {url}: {e}")
+
             if not uses_polyfill:
                 if args.verbose:
                     print(f"Crawling links on {url}...")
@@ -88,6 +120,18 @@ def main():
                     uses_polyfill = check_polyfill_cdn(link, args.verbose)
                     if not args.verbose and uses_polyfill:
                         print(f"{Fore.RED}{link} uses polyfill CDN")
+                    if args.js:
+                        try:
+                            response = requests.get(link)
+                            response.raise_for_status()
+                            soup = BeautifulSoup(response.content, 'html.parser')
+                            scripts = soup.find_all('script')
+                            for script in scripts:
+                                script_content = script.string or ""
+                                scan_dangerous_functions(script_content, link, args.verbose)
+                        except requests.exceptions.RequestException as e:
+                            if args.verbose:
+                                print(f"{Fore.RED}Error accessing {link}: {e}")
             pbar.update(1)
 
 if __name__ == "__main__":
