@@ -55,6 +55,18 @@ def scan_dangerous_functions(script_content, url, verbose):
         else:
             print(f"{Fore.RED}{url} contains dangerous functions: {', '.join(found_functions)}")
 
+def scan_js_files(url, soup, verbose):
+    scripts = soup.find_all('script', src=True)
+    for script in scripts:
+        script_url = urljoin(url, script['src'])
+        try:
+            response = requests.get(script_url)
+            response.raise_for_status()
+            scan_dangerous_functions(response.text, script_url, verbose)
+        except requests.exceptions.RequestException as e:
+            if verbose:
+                print(f"{Fore.RED}Error accessing {script_url}: {e}")
+
 def get_links_on_page(url, domain, verbose):
     try:
         response = requests.get(url)
@@ -65,11 +77,11 @@ def get_links_on_page(url, domain, verbose):
             link = urljoin(url, a_tag['href'])
             if urlparse(link).netloc == domain:
                 links.add(link)
-        return links
+        return links, soup
     except requests.exceptions.RequestException as e:
         if verbose:
             print(f"{Fore.RED}Error accessing {url}: {e}")
-        return set()
+        return set(), None
 
 def main():
     parser = argparse.ArgumentParser(description="Check URLs for polyfill CDN usage and dangerous JavaScript functions.")
@@ -106,6 +118,7 @@ def main():
                     for script in scripts:
                         script_content = script.string or ""
                         scan_dangerous_functions(script_content, url, args.verbose)
+                    scan_js_files(url, soup, args.verbose)
                 except requests.exceptions.RequestException as e:
                     if args.verbose:
                         print(f"{Fore.RED}Error accessing {url}: {e}")
@@ -113,7 +126,7 @@ def main():
             if not uses_polyfill:
                 if args.verbose:
                     print(f"Crawling links on {url}...")
-                links = get_links_on_page(url, domain, args.verbose)
+                links, soup = get_links_on_page(url, domain, args.verbose)
                 for link in links:
                     if args.verbose:
                         print(f"Checking {link}...")
@@ -129,6 +142,7 @@ def main():
                             for script in scripts:
                                 script_content = script.string or ""
                                 scan_dangerous_functions(script_content, link, args.verbose)
+                            scan_js_files(link, soup, args.verbose)
                         except requests.exceptions.RequestException as e:
                             if args.verbose:
                                 print(f"{Fore.RED}Error accessing {link}: {e}")
