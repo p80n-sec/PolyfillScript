@@ -4,6 +4,7 @@ from urllib.parse import urlparse, urljoin
 import argparse
 from colorama import Fore, Style, init
 from tqdm import tqdm
+import re
 
 init(autoreset=True)
 
@@ -18,13 +19,15 @@ def normalize_url(url):
     return url
 
 def check_polyfill_cdn(url, verbose):
+    polyfill_pattern = re.compile(r'http[s]?://.*polyfill\.io/.*')
     try:
         response = requests.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
         scripts = soup.find_all('script')
         for script in scripts:
-            if script.get('src') and 'polyfill.io' in script.get('src'):
+            src = script.get('src')
+            if src and polyfill_pattern.match(src):
                 if verbose:
                     print(f"{Fore.GREEN}Polyfill found in {url}")
                 return True
@@ -53,7 +56,7 @@ def get_links_on_page(url, domain, verbose):
 def main():
     parser = argparse.ArgumentParser(description="Check URLs for polyfill CDN usage.")
     parser.add_argument('-u', '--url', help="Run a single URL from input.")
-    parser.add_argument('-f', '--file', default='/mnt/data/urls.txt', help="Specify a file containing URLs.")
+    parser.add_argument('-f', '--file', default='urls.txt', help="Specify a file containing URLs.")
     parser.add_argument('-v', '--verbose', action='store_true', help="Enable verbose output.")
 
     args = parser.parse_args()
