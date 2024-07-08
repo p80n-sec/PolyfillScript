@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urljoin
+from urllib.parse: import urlparse, urljoin
 import argparse
 from colorama import Fore, Style, init
 from tqdm import tqdm
@@ -42,18 +42,21 @@ def scan_dangerous_functions(script_content, url, verbose):
     dangerous_functions = [
         'bypassSecurityTrustHtml', 'bypassSecurityTrustScript', 'bypassSecurityTrustStyle',
         'bypassSecurityTrustUrl', 'bypassSecurityTrustResourceUrl', 'trustAsHtml',
-        '$sce.trustAsHtml', '$eval', '$evalAsync', 'eval'
+        '$sce.trustAsHtml'
     ]
     found_functions = []
-    for function in dangerous_functions:
-        if re.search(r'\b' + re.escape(function) + r'\b', script_content):
-            found_functions.append(function)
+    script_lines = script_content.splitlines()
+    for line_number, line in enumerate(script_lines, 1):
+        for function in dangerous_functions:
+            if re.search(r'\b' + re.escape(function) + r'\b', line):
+                found_functions.append((function, line_number))
     
     if found_functions:
-        if verbose:
-            print(f"{Fore.YELLOW}Dangerous functions found in {url}: {', '.join(found_functions)}")
-        else:
-            print(f"{Fore.RED}{url} contains dangerous functions: {', '.join(found_functions)}")
+        for function, line_number in found_functions:
+            if verbose:
+                print(f"{Fore.YELLOW}Dangerous function '{function}' found in {url} at line {line_number}")
+            else:
+                print(f"{Fore.RED}{url} contains dangerous function '{function}' at line {line_number}")
 
 def scan_js_files(url, soup, verbose):
     scripts = soup.find_all('script', src=True)
